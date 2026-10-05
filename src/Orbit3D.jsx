@@ -1,53 +1,63 @@
 import React,{useEffect,useRef,useState} from "react";
 import * as THREE from "three";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
-import {Maximize2,Pause,Play,RotateCcw,SlidersHorizontal,ZoomIn} from "lucide-react";
+import {Maximize2,Pause,Play,RotateCcw,SlidersHorizontal} from "lucide-react";
 
 const TYPES={
-  active:{label:"Active satellites",color:0x7dff9c,desc:"Operational spacecraft still performing a mission."},
-  dead:{label:"Dead / inactive satellites",color:0xb8c0cc,desc:"Payloads that no longer perform their mission."},
-  rocket:{label:"Rocket bodies",color:0xffb36b,desc:"Spent launch-vehicle stages and related hardware."},
-  fragment:{label:"Fragmentation debris",color:0xff6f8f,desc:"Pieces produced by collisions, explosions or breakups."},
-  mission:{label:"Mission-related objects",color:0x72d9ff,desc:"Covers, adapters, caps and other hardware released during missions."},
-  unidentified:{label:"Unidentified objects",color:0xc59cff,desc:"Detected objects not yet confidently linked to a known origin."},
-  tiny:{label:"Small debris cloud",color:0xffe36e,desc:"A conceptual statistical cloud representing millimetre-to-centimetre debris."}
+ active:{label:"Active satellites",color:0x7dff9c,desc:"Operational spacecraft still performing missions."},
+ dead:{label:"Dead / inactive satellites",color:0xb8c0cc,desc:"Spacecraft that no longer perform their mission but remain in orbit."},
+ rocket:{label:"Rocket bodies",color:0xffb36b,desc:"Spent launch-vehicle stages and related hardware."},
+ fragment:{label:"Collision / fragmentation debris",color:0xff6f8f,desc:"Fragments created by explosions, collisions or other breakup events."},
+ mission:{label:"Mission-related objects",color:0x72d9ff,desc:"Adapters, covers and other hardware released during missions."},
+ unidentified:{label:"Unidentified objects",color:0xc59cff,desc:"Detected objects that cannot yet be confidently linked to a source."},
+ tiny:{label:"1 mm–1 cm debris cloud",color:0xffe36e,desc:"A conceptual visualisation of the enormous population of smaller debris."}
 };
+const SPECIAL=[
+ {name:"ISS",type:"active",r:1.48,color:0xffffff,desc:"International Space Station — a crewed orbital platform exposed to the orbital environment."},
+ {name:"ClearSpace-1",type:"mission",r:1.65,color:0x72d9ff,desc:"ESA-supported active debris-removal mission concept for capturing and removing a defunct object."},
+ {name:"SpaDeX",type:"active",r:1.55,color:0x5dd9ff,desc:"India's rendezvous and docking demonstration; related technologies can enable future servicing."}
+];
 function seeded(i){const x=Math.sin(i*12.9898)*43758.5453;return x-Math.floor(x)}
-function pointOnOrbit(i,count,r,tilt){
-  const a=(i/count)*Math.PI*2;const p=new THREE.Vector3(Math.cos(a)*r,Math.sin(a)*r,0);
-  p.applyAxisAngle(new THREE.Vector3(1,0,0),tilt);p.applyAxisAngle(new THREE.Vector3(0,1,0),(seeded(i+210)-.5)*.7);return p;
-}
+function orbitPoint(i,count,r,tilt){const a=i/count*Math.PI*2,p=new THREE.Vector3(Math.cos(a)*r,Math.sin(a)*r,0);p.applyAxisAngle(new THREE.Vector3(1,0,0),tilt);p.applyAxisAngle(new THREE.Vector3(0,1,0),(seeded(i+91)-.5)*.75);return p}
+function labelSprite(text,color="#ffffff"){const c=document.createElement("canvas");c.width=700;c.height=100;const x=c.getContext("2d");x.font="600 28px Arial";x.fillStyle=color;x.shadowColor="#000";x.shadowBlur=8;x.fillText(text,12,52);const t=new THREE.CanvasTexture(c);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));s.scale.set(2.25,.32,1);return s}
 export default function Orbit3D({onSelect}){
- const mount=useRef(null);const sceneRef=useRef(null);const [paused,setPaused]=useState(false);const [selected,setSelected]=useState(null);const [layers,setLayers]=useState(Object.keys(TYPES).reduce((a,k)=>(a[k]=true,a),{}));const [speed,setSpeed]=useState(1);const [hud,setHud]=useState(true);
+ const mount=useRef(null);const [paused,setPaused]=useState(false);const [speed,setSpeed]=useState(1);const [layers,setLayers]=useState(Object.fromEntries(Object.keys(TYPES).map(k=>[k,true])));const [mode,setMode]=useState("environment");const [selected,setSelected]=useState(null);const [hud,setHud]=useState(true);
  useEffect(()=>{
-  const el=mount.current;if(!el)return;const scene=new THREE.Scene();scene.background=new THREE.Color(0x02040a);sceneRef.current=scene;
-  const camera=new THREE.PerspectiveCamera(42,el.clientWidth/el.clientHeight,.05,100);camera.position.set(0,3.1,7.4);
+  const el=mount.current;if(!el)return;
+  const scene=new THREE.Scene();scene.background=new THREE.Color(0x010308);
+  const camera=new THREE.PerspectiveCamera(42,el.clientWidth/el.clientHeight,.03,100);camera.position.set(0,2.8,7.2);
   const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(el.clientWidth,el.clientHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;el.appendChild(renderer.domElement);
-  const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.055;controls.minDistance=3.2;controls.maxDistance=12;controls.target.set(0,0,0);
-  scene.add(new THREE.AmbientLight(0x6688aa,.8));const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(4,3,5);scene.add(sun);
-  const starGeo=new THREE.BufferGeometry(),starPts=[];for(let i=0;i<1800;i++){const r=18+seeded(i)*22,a=seeded(i+2)*Math.PI*2,b=Math.acos(2*seeded(i+3)-1);starPts.push(r*Math.sin(b)*Math.cos(a),r*Math.sin(b)*Math.sin(a),r*Math.cos(b));}starGeo.setAttribute("position",new THREE.Float32BufferAttribute(starPts,3));scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xbddcff,size:.025,sizeAttenuation:true,transparent:true,opacity:.85})));
-  const earth=new THREE.Mesh(new THREE.SphereGeometry(1.12,64,64),new THREE.MeshPhongMaterial({color:0x174f70,emissive:0x06121d,shininess:12}));scene.add(earth);
-  const glow=new THREE.Mesh(new THREE.SphereGeometry(1.17,48,48),new THREE.MeshBasicMaterial({color:0x5dd9ff,transparent:true,opacity:.11,side:THREE.BackSide}));scene.add(glow);
-  const groups={};Object.keys(TYPES).forEach(k=>{groups[k]=new THREE.Group();groups[k].userData.layer=k;scene.add(groups[k]);});
-  const radii={active:1.48,dead:1.68,rocket:1.88,fragment:2.08,mission:2.3,unidentified:2.5};
-  Object.entries(radii).forEach(([k,r])=>{const curve=new THREE.EllipseCurve(0,0,r,r*(.66+.18*seeded(r*10)),0,Math.PI*2,false,0);const pts=curve.getPoints(128).map(p=>new THREE.Vector3(p.x,p.y,0));const line=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:TYPES[k].color,transparent:true,opacity:.15}));line.rotation.x=(seeded(r*20)-.5)*1.1;line.rotation.z=(seeded(r*30)-.5)*.8;groups[k].add(line);});
-  const items=[];const counts={active:42,dead:25,rocket:20,fragment:82,mission:22,unidentified:25};
-  Object.entries(counts).forEach(([k,count])=>{for(let i=0;i<count;i++){const size=k==="rocket"?.075:k==="fragment"?.035:k==="mission"?.045:k==="unidentified"?.04:.06;const mesh=new THREE.Mesh(new THREE.SphereGeometry(size,k==="fragment"?6:10,k==="fragment"?6:10),new THREE.MeshBasicMaterial({color:TYPES[k].color}));const g=new THREE.Group();g.add(mesh);g.position.copy(pointOnOrbit(i+7,count,radii[k],(seeded(i+13)-.5)*1.15));g.userData={type:k};groups[k].add(g);items.push(g);}});
-  const tinyGeo=new THREE.BufferGeometry(),tinyPos=[];for(let i=0;i<1200;i++){const a=seeded(i)*Math.PI*2,r=1.55+seeded(i+2)*1.05,y=(seeded(i+3)-.5)*1.0;tinyPos.push(Math.cos(a)*r,y,Math.sin(a)*r);}tinyGeo.setAttribute("position",new THREE.Float32BufferAttribute(tinyPos,3));groups.tiny.add(new THREE.Points(tinyGeo,new THREE.PointsMaterial({color:TYPES.tiny.color,size:.018,transparent:true,opacity:.55})));
-  const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
-  const click=e=>{const r=renderer.domElement.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects(items,true);if(hits.length){let o=hits[0].object;while(o&&!o.userData.type)o=o.parent;if(o){setSelected(o.userData.type);onSelect?.(o.userData.type)}}};
-  renderer.domElement.addEventListener("click",click);const clock=new THREE.Clock();let raf;
-  const animate=()=>{raf=requestAnimationFrame(animate);const dt=clock.getDelta();if(!paused){Object.entries(groups).forEach(([k,g],idx)=>{g.rotation.y+=dt*(k==="tiny"?.018:.04*speed*(idx%2?-.65:1));});earth.rotation.y+=dt*.035*speed;glow.rotation.y-=dt*.012;}controls.update();renderer.render(scene,camera)};animate();
+  const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.055;controls.minDistance=3;controls.maxDistance=13;
+  scene.add(new THREE.AmbientLight(0x64809a,.9));const sun=new THREE.DirectionalLight(0xffffff,2.5);sun.position.set(4,3,5);scene.add(sun);
+  const sg=new THREE.BufferGeometry(),sp=[];for(let i=0;i<2200;i++){const r=17+seeded(i)*25,a=seeded(i+2)*Math.PI*2,b=Math.acos(2*seeded(i+3)-1);sp.push(r*Math.sin(b)*Math.cos(a),r*Math.sin(b)*Math.sin(a),r*Math.cos(b));}sg.setAttribute("position",new THREE.Float32BufferAttribute(sp,3));scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xbddcff,size:.024,sizeAttenuation:true,opacity:.8,transparent:true})));
+  const earth=new THREE.Mesh(new THREE.SphereGeometry(1.12,64,64),new THREE.MeshPhongMaterial({color:0x17516f,emissive:0x06111c,shininess:15}));scene.add(earth);scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.18,48,48),new THREE.MeshBasicMaterial({color:0x55d8ff,transparent:true,opacity:.1,side:THREE.BackSide})));
+  const groups={};Object.keys(TYPES).forEach(k=>{groups[k]=new THREE.Group();groups[k].userData.layer=k;scene.add(groups[k])});
+  const radii={active:1.48,dead:1.7,rocket:1.9,fragment:2.08,mission:2.32,unidentified:2.52};
+  const bands={LEO:[1.42,1.78],MEO:[1.95,2.3],GEO:[2.52,2.68]};
+  Object.entries(bands).forEach(([name,[a,b]],idx)=>{const r=(a+b)/2;const pts=new THREE.EllipseCurve(0,0,r,r*.72,0,Math.PI*2,false,0).getPoints(160).map(p=>new THREE.Vector3(p.x,p.y,0));const line=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:idx===0?0x4eeaff:idx===1?0x9c7cff:0xffbd66,transparent:true,opacity:.2}));line.rotation.x=(idx-.9)*.42;scene.add(line);const l=labelSprite(name,idx===0?"#4eeaff":idx===1?"#c59cff":"#ffbd66");l.position.set(r,0,.02);scene.add(l)});
+  Object.entries(radii).forEach(([k,r])=>{const pts=new THREE.EllipseCurve(0,0,r,r*(.66+.18*seeded(r*10)),0,Math.PI*2,false,0).getPoints(128).map(p=>new THREE.Vector3(p.x,p.y,0));const line=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:TYPES[k].color,transparent:true,opacity:.11}));line.rotation.x=(seeded(r*20)-.5)*1.05;groups[k].add(line)});
+  const items=[];const counts={active:42,dead:28,rocket:22,fragment:95,mission:24,unidentified:28};
+  Object.entries(counts).forEach(([k,n])=>{for(let i=0;i<n;i++){const size=k==="rocket"?.075:k==="fragment"?.035:k==="mission"?.045:k==="unidentified"?.04:.06;const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.SphereGeometry(size,k==="fragment"?6:10,k==="fragment"?6:10),new THREE.MeshBasicMaterial({color:TYPES[k].color})));g.position.copy(orbitPoint(i+5,n,radii[k],(seeded(i+13)-.5)*1.15));g.userData={type:k};groups[k].add(g);items.push(g)}});
+  const tg=new THREE.BufferGeometry(),tp=[];for(let i=0;i<1500;i++){const a=seeded(i)*Math.PI*2,r=1.5+seeded(i+2)*1.15,y=(seeded(i+3)-.5)*1.05;tp.push(Math.cos(a)*r,y,Math.sin(a)*r)}tg.setAttribute("position",new THREE.Float32BufferAttribute(tp,3));groups.tiny.add(new THREE.Points(tg,new THREE.PointsMaterial({color:TYPES.tiny.color,size:.018,transparent:true,opacity:.55})));
+  const specialGroup=new THREE.Group();scene.add(specialGroup);SPECIAL.forEach((o,i)=>{const g=new THREE.Group();g.position.copy(orbitPoint(.12+i*.27,1,o.r,.3+i*.35));g.add(new THREE.Mesh(new THREE.SphereGeometry(.075,12,12),new THREE.MeshBasicMaterial({color:o.color})));const l=labelSprite(o.name,"#ffffff");l.position.y=.16;g.add(l);g.userData={special:o};specialGroup.add(g);items.push(g)});
+  const radar=new THREE.Group();scene.add(radar);for(let i=0;i<6;i++){const a=i/6*Math.PI*2;const p1=new THREE.Vector3(Math.cos(a)*1.3,Math.sin(a)*1.3,0),p2=new THREE.Vector3(Math.cos(a)*3.1,Math.sin(a)*3.1,0);radar.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]),new THREE.LineBasicMaterial({color:0x70e1ff,transparent:true,opacity:.35})))}radar.visible=mode==="tracking";
+  const cleanup=new THREE.Group();scene.add(cleanup);const target=new THREE.Mesh(new THREE.BoxGeometry(.22,.1,.1),new THREE.MeshBasicMaterial({color:0xb8c0cc}));target.position.set(2.15,.35,.2);cleanup.add(target);const serv=new THREE.Mesh(new THREE.ConeGeometry(.1,.35,8),new THREE.MeshBasicMaterial({color:0x72d9ff}));serv.position.set(1.65,.3,.2);serv.rotation.z=-Math.PI/2;cleanup.add(serv);cleanup.visible=mode==="cleanup";
+  const collision=new THREE.Group();scene.add(collision);const center=new THREE.Mesh(new THREE.SphereGeometry(.1,8,8),new THREE.MeshBasicMaterial({color:0xff6f8f}));center.position.set(2.05,.1,.2);collision.add(center);for(let i=0;i<28;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.025,5,5),new THREE.MeshBasicMaterial({color:0xff6f8f}));const a=seeded(i)*Math.PI*2,rr=.2+seeded(i+40)*.8;p.position.set(2.05+Math.cos(a)*rr,.1+(seeded(i+50)-.5)*rr, .2+Math.sin(a)*rr);collision.add(p)}collision.visible=mode==="kessler";
+  const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();const click=e=>{const r=renderer.domElement.getBoundingClientRect();mouse.x=(e.clientX-r.left)/r.width*2-1;mouse.y=-(e.clientY-r.top)/r.height*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects(items,true);if(hits.length){let o=hits[0].object;while(o&&!o.userData.type&&!o.userData.special)o=o.parent;if(o?.userData.special){setSelected(o.userData.special)}else if(o?.userData.type){setSelected(TYPES[o.userData.type]);onSelect?.(o.userData.type)}}};renderer.domElement.addEventListener("click",click);
+  let raf;const clock=new THREE.Clock();const animate=()=>{raf=requestAnimationFrame(animate);const dt=clock.getDelta();if(!paused){earth.rotation.y+=dt*.035*speed;Object.values(groups).forEach((g,i)=>g.rotation.y+=dt*.035*speed*(i%2?-.7:1));specialGroup.rotation.y+=dt*.035*speed;collision.rotation.y+=dt*.2*speed}controls.update();renderer.render(scene,camera)};animate();
   const resize=()=>{camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight)};window.addEventListener("resize",resize);
   return()=>{cancelAnimationFrame(raf);window.removeEventListener("resize",resize);renderer.domElement.removeEventListener("click",click);controls.dispose();renderer.dispose();el.removeChild(renderer.domElement)};
- },[onSelect,paused,speed]);
- useEffect(()=>{const root=sceneRef.current;if(!root)return;Object.entries(layers).forEach(([k,v])=>{const g=root.children.find(x=>x.userData?.layer===k);if(g)g.visible=v});},[layers]);
+ },[mode,paused,speed,onSelect]);
+ useEffect(()=>{const root=mount.current?.querySelector("canvas");void root;},[layers]);
  const toggle=k=>setLayers(v=>({...v,[k]:!v[k]}));
+ const modes=[["environment","ORBIT"],["tracking","TRACKING"],["kessler","KESSLER"],["cleanup","CLEANUP"]];
  return <div className="orbit3d-shell">
   <div ref={mount} className="orbit3d-canvas"/>
-  {hud&&<div className="orbitHud"><div className="hudTop"><span><i className="livePulse"/> ORBITAL VISUAL MODEL</span><b>EARTH ORBIT / 3D</b></div><div className="hudBottom"><div><strong>ORBIT ATLAS</strong><span>Representative distribution · not live telemetry</span></div><div className="hudHint">DRAG TO ROTATE · SCROLL TO ZOOM</div></div></div>}
-  <div className="orbitControls"><button onClick={()=>setPaused(v=>!v)} title={paused?"Play":"Pause"}>{paused?<Play size={16}/>:<Pause size={16}/>}</button><button onClick={()=>setSpeed(v=>v===1?5:v===5?20:1)} title="Simulation speed"><span className="speed">{speed}×</span></button><button onClick={()=>setHud(v=>!v)} title="Toggle HUD"><SlidersHorizontal size={16}/></button><button onClick={()=>setHud(true)} title="Reset view"><RotateCcw size={16}/></button><button onClick={()=>mount.current?.requestFullscreen?.()} title="Fullscreen"><Maximize2 size={16}/></button></div>
-  <div className="layerPanel"><div className="layerTitle">OBJECT LAYERS <span>toggle</span></div>{Object.entries(TYPES).map(([k,v])=><button key={k} onClick={()=>toggle(k)} className={layers[k]?"on":""}><i style={{background:"#"+v.color.toString(16).padStart(6,"0")}}/><span>{v.label}</span></button>)}</div>
-  {selected&&<div className="orbitInspect"><button onClick={()=>setSelected(null)}>×</button><span>{TYPES[selected].label}</span><h4>{TYPES[selected].desc}</h4><small>Representative visualization. Categories follow the ESA/ISRO material used by Orbit Atlas; positions are illustrative, not a live catalogue.</small></div>}
+  {hud&&<div className="orbitHud"><div className="hudTop"><span><i className="livePulse"/> ORBIT ATLAS / 3D</span><b>{mode.toUpperCase()} MODE · CONCEPTUAL MODEL</b></div><div className="hudBottom"><div><strong>EARTH ORBIT</strong><span>LEO · MEO · GEO · satellites · rockets · debris · special missions</span></div><div className="hudHint">DRAG · ZOOM · CLICK OBJECTS</div></div></div>}
+  <div className="modeBar">{modes.map(([k,l])=><button key={k} className={mode===k?"active":""} onClick={()=>setMode(k)}>{l}</button>)}</div>
+  <div className="orbitControls"><button onClick={()=>setPaused(v=>!v)} title="Pause / play">{paused?<Play size={16}/>:<Pause size={16}/>}</button><button onClick={()=>setSpeed(v=>v===1?5:v===5?20:1)} title="Simulation speed"><span className="speed">{speed}×</span></button><button onClick={()=>setHud(v=>!v)} title="HUD"><SlidersHorizontal size={16}/></button><button onClick={()=>{setMode("environment");setSpeed(1);setSelected(null)}} title="Reset"><RotateCcw size={16}/></button><button onClick={()=>mount.current?.requestFullscreen?.()} title="Fullscreen"><Maximize2 size={16}/></button></div>
+  <div className="layerPanel"><div className="layerTitle">OBJECTS FROM THE ARTICLE <span>toggle</span></div>{Object.entries(TYPES).map(([k,v])=><button key={k} onClick={()=>toggle(k)} className={layers[k]?"on":""}><i style={{background:"#"+v.color.toString(16).padStart(6,"0")}}/><span>{v.label}</span></button>)}</div>
+  <div className="articleLegend"><span>LEO</span><span>MEO</span><span>GEO</span><small>Orbit bands are visualised for understanding; object positions are not a live catalogue.</small></div>
+  {selected&&<div className="orbitInspect"><button onClick={()=>setSelected(null)}>×</button><span>{selected.label||selected.name}</span><h4>{selected.desc}</h4><small>Conceptual visualisation based on the space-debris article and official ESA/ISRO material. It does not claim real-time object positions.</small></div>}
  </div>
 }
