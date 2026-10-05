@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {createRoot} from "react-dom/client";
 import {ArrowDown,ArrowUpRight,ChevronRight,CircleHelp,ExternalLink,Globe2,Layers,Menu,Orbit,Radio,Search,Shield,Sparkles,X,Zap} from "lucide-react";
 import "./styles.css";
+import Orbit3D from "./Orbit3D.jsx";
 
 const sources=[
   ["ESA Space Debris","https://www.esa.int/Space_Safety/Space_Debris/Space_debris"],
@@ -43,7 +44,7 @@ function App(){
           <div className="heroActions"><button className="primary" onClick={()=>scroll("debris")}>Explore the orbit <ChevronRight size={18}/></button><button className="ghost" onClick={()=>setTour(true)}>How does this work?</button></div>
           <div className="heroMeta"><span><strong>SPACE DEBRIS</strong><small>A growing orbital problem</small></span><span><strong>2026 REPORT</strong><small>ESA + ISRO snapshot</small></span></div>
         </div>
-        <OrbitScene onSelect={setSelected}/>
+        <Orbit3D onSelect={setSelected}/>
       </section>
 
       <section className="chapter" id="debris"><div className="chapterNum">01</div><div className="chapterTitle"><p>THE BASICS</p><h2>So, what exactly<br/>is <em>space junk?</em></h2></div><div className="chapterText"><p>Space debris is human-made material left in Earth orbit that no longer has a useful purpose. That includes dead satellites, spent rocket stages, fragments from breakups and tiny pieces we can barely see.</p><p>The strange part is the scale. Something microscopic from Earth can become a serious engineering problem when it is moving around a planet at orbital velocity.</p></div></section>
@@ -73,7 +74,6 @@ function App(){
     {tour&&<Tour close={()=>setTour(false)} scroll={scroll}/>}
   </div>;
 }
-function OrbitScene({onSelect}){return <div className="scene" aria-label="Interactive illustration of Earth orbit and common space-object types"><div className="earth"><div className="land l1"/><div className="land l2"/><div className="land l3"/><span className="atmo"/></div>{Object.keys(objects).map((k,i)=><button key={k} className={"orbObj o"+i} onClick={()=>onSelect(k)} title={objects[k].name}>{objects[k].icon}</button>)}<div className="ring ring1"/><div className="ring ring2"/><div className="ring ring3"/><div className="legend"><span><i className="dot live"/>active</span><span><i className="dot debris"/>debris</span><span><i className="dot rocket"/>rocket body</span></div></div>}
 function Stat({n,t,s}){return <div className="stat"><strong>{n}</strong><span>{t}</span><small>{s}</small></div>}
 function Card({icon,t,d}){return <div className="futureCard">{icon}<h3>{t}</h3><p>{d}</p></div>}
 function Tour({close,scroll}){const [step,setStep]=useState(0);const steps=[["START HERE","Space debris is human-made material left in orbit."],["ZOOM IN","A tiny object can become dangerous at orbital velocity."],["SEE THE CASCADE","Kessler Syndrome describes a possible self-reinforcing collision chain."],["LOOK AHEAD","Tracking, removal and responsible end-of-life design are the path forward."]];return <div className="tourOverlay"><div className="tourCard" role="dialog" aria-modal="true"><button className="close" onClick={close} aria-label="Close"><X/></button><span>60 SECOND TOUR · {step+1}/4</span><h2>{steps[step][0]}</h2><p>{steps[step][1]}</p><div className="tourDots">{steps.map((_,i)=><i key={i} className={i===step?"on":""}/>)}</div><div className="tourActions"><button onClick={close}>Exit</button>{step<3?<button className="primary" onClick={()=>{setStep(step+1);if(step===0)scroll("debris");if(step===1)scroll("kessler");if(step===2)scroll("cleanup")}}>Next <ChevronRight size={17}/></button>:<button className="primary" onClick={()=>{close();scroll("sources")}}>Explore sources <ArrowDown size={17}/></button>}</div></div></div>}
