@@ -1,8 +1,8 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{Suspense,useCallback,useEffect,useMemo,useState} from "react";
 import {createRoot} from "react-dom/client";
 import {ArrowDown,ArrowUpRight,ChevronRight,CircleHelp,ExternalLink,Globe2,Layers,Menu,Orbit,Radio,Search,Shield,Sparkles,X,Zap} from "lucide-react";
 import "./styles.css";
-import Orbit3D from "./Orbit3D.jsx";
+const Orbit3D=React.lazy(()=>import("./Orbit3D.jsx"));
 
 const sources=[
   ["ESA Space Debris","https://www.esa.int/Space_Safety/Space_Debris/Space_debris"],
@@ -23,6 +23,7 @@ const nav=[["The orbit","orbit"],["What is debris?","debris"],["The numbers","nu
 
 function App(){
   const [menu,setMenu]=useState(false),[selected,setSelected]=useState(null),[search,setSearch]=useState(""),[tour,setTour]=useState(false),[scale,setScale]=useState(55);
+  const handle3DSelect=useCallback((item)=>setSelected(typeof item==="string"?item:item),[]);
   useEffect(()=>{document.title="Orbit Atlas — Earth’s Orbit Is Not Empty"},[]);
   const filtered=useMemo(()=>Object.entries(objects).filter(([,v])=>
     (v.name+" "+v.tag).toLowerCase().includes(search.toLowerCase())),[search]);
@@ -70,7 +71,7 @@ function App(){
       <section className="sources" id="sources"><div><p>EXPLORE THE SOURCES</p><h2>The atlas is only<br/><em>the beginning.</em></h2></div><div className="sourceList">{sources.map(([n,u])=><a key={n} href={u} target="_blank" rel="noreferrer"><span>{n}</span><ExternalLink size={15}/></a>)}</div></section>
     </main>
     <footer><span>ORBIT ATLAS · EARTH ORBIT FIELD GUIDE</span><button onClick={()=>window.scrollTo({top:0,behavior:"smooth"})}>Back to top <ArrowUpRight size={15}/></button></footer>
-    {selected&&<div className="modal" onClick={()=>setSelected(null)}><div className="inspect" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setSelected(null)} aria-label="Close"><X/></button><span className="objectTag">{objects[selected].tag}</span><h2>{objects[selected].name}</h2><p>{objects[selected].desc}</p><div className="why"><CircleHelp size={18}/><div><b>Why it matters</b><span>{objects[selected].why}</span></div></div><div className="insight"><span>ORBIT ATLAS NOTE</span><strong>Every object has an orbit. The challenge is keeping those orbits predictable.</strong></div></div></div>}
+    {selected&&(()=>{const data=typeof selected==="string"?objects[selected]:selected;if(!data)return null;return <div className="modal" onClick={()=>setSelected(null)}><div className="inspect" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setSelected(null)} aria-label="Close"><X/></button><span className="objectTag">{data.tag||data.type?.toUpperCase()}</span><h2>{data.name}</h2><p>{data.desc}</p><div className="why"><CircleHelp size={18}/><div><b>Why it matters</b><span>{data.why||"This object or capability is part of the orbital environment described in the article."}</span></div></div><div className="insight"><span>ORBIT ATLAS NOTE</span><strong>Every object has an orbit. The challenge is keeping those orbits predictable.</strong></div></div></div>})()}
     {tour&&<Tour close={()=>setTour(false)} scroll={scroll}/>}
   </div>;
 }
