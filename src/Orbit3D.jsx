@@ -198,6 +198,7 @@ export default function Orbit3D({onSelect}){
    last=time;
    const dt=Math.min(clock.getDelta(),.05);
    Object.entries(groups).forEach(([k,g])=>{g.visible=layersRef.current[k]!==false});
+   specialGroup.children.forEach(child=>{const type=child.userData.special?.type;child.visible=type==="tracking"||layersRef.current[type]!==false});
    radar.visible=modeRef.current==="tracking";cleanup.visible=modeRef.current==="cleanup";collision.visible=modeRef.current==="kessler";
    if(!pausedRef.current){
     earth.rotation.y+=dt*.035*speedRef.current;
